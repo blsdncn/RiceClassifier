@@ -16,11 +16,11 @@ def load_image_data():
     data_fol = pathlib.Path(data_fol)
 
 
-    arborio_list = list(data_fol.glob('Arborio/*'))
-    basmati_list = list(data_fol.glob('Basmati/*'))
-    ipsala_list = list(data_fol.glob('Ipsala/*'))
-    jasmine_list = list(data_fol.glob('Jasmine/*'))
-    karacadag_list = list(data_fol.glob('Karacadag/*'))
+    arborio_list = list(data_fol.glob('Arborio/*'))[:50]
+    basmati_list = list(data_fol.glob('Basmati/*'))[:50]
+    ipsala_list = list(data_fol.glob('Ipsala/*'))[:50]
+    jasmine_list = list(data_fol.glob('Jasmine/*'))[:50]
+    karacadag_list = list(data_fol.glob('Karacadag/*'))[:50]
 
     rice_images = {
         'arborio': arborio_list,
@@ -55,20 +55,26 @@ def split_data(X_data, y_labels, train_split=.8):
     return X_train, X_test, y_train, y_test
 
 
-'''
-Some basic SVM code
-Does not work on the multiclass data as, might consider an SVM model for each category
-Takes about 11 min to run on my machine
-
--James
-'''
 
 X_data, y_data = load_image_data()
 X_train, X_test, y_train, y_test = split_data(X_data, y_data)
 
-model = svm.SVC(kernel='linear')
-model.fit(X_train, y_train)
+class_names = ['arborio', 'basmati', 'ipsala', 'jasmine', 'karacadag']
+class_models = []
+categories = 2 # len(class_names)
+for cat in range(categories):
+    model = svm.SVC(kernel='linear')
+    y_train_modified = list(map(lambda x: x if x == class_names[cat] else "", y_train))
+    print(cat)
+    print(y_train)
+    print(y_train_modified)
+    model.fit(X_train, y_train_modified)
+    class_models.append(model)
 
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-print("Accuracy:", accuracy)
+for cat in range(categories):
+    y_pred = model.predict(X_test)
+    y_test_modfied = list(map(lambda x: x if x == class_names[cat] else "", y_test))
+    accuracy = accuracy_score(y_pred, y_test_modfied)
+    print("Accuracy:", accuracy)
+
+
