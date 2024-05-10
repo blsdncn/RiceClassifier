@@ -220,8 +220,6 @@ for idx, y_true in enumerate(y_test):
     if y_true != best_model_pred[idx]:
         wrong_indices.append(idx)
 
-#rint("Wrong indicies", wrong_indices)  # test code
-
 # Print and display images for the non-matching elements
 for idx in wrong_indices[:10]:
     print("Index:", idx)
