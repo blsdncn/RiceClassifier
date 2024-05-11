@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import os
+import keras
 def func_confusion_matrix(y_test, y_pred):
     """ this function is used to calculate the confusion matrix and a set of metrics.
     INPUT:
@@ -57,3 +60,50 @@ def func_confusion_matrix(y_test, y_pred):
         precision_array[index] = value / precision_sum
 
     return conf_matrix, accuracy, recall_array, precision_array
+
+
+def plotConvCurveFromHistory(history,save_path=os.path.join(os.path.dirname(__file__),'..','metric_images',"CS 549 Project CNN")):
+# Plot training & validation loss values
+    plt.figure(figsize=(8, 4))
+    plt.plot(history.history['loss'], label='Train Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Model Loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(loc='upper right')
+    plt.show()
+    plt.save(os.path.join(save_path,'lossCurve.jpg'))
+
+
+# Plot training & validation accuracy values
+    plt.figure(figsize=(8, 4))
+    plt.plot(history.history['accuracy'], label='Train Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.title('Model Accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(loc='lower right')
+    plt.show()
+    plt.save(os.path.join(save_path,'accuracyCurve.jpg'))
+
+
+def getDataAndSplit(data_dir,verbose=False):
+    dataset = keras.utils.image_dataset_from_directory(
+        directory=data_dir,
+        labels='inferred',  
+        label_mode='categorical',  
+        batch_size=32,  
+        image_size=(256, 256),  
+        shuffle=True,  
+        seed=42,  
+        interpolation='bilinear'  
+    )
+    dataset = dataset.map(lambda x,y: (x/255,y))
+    train_size = int(len(dataset)*.7)
+    val_size = int(len(dataset)*.2)
+    test_size = int(len(dataset)*.1)
+    if(verbose): print(f"train: {train_size} | val: {val_size} | test: {test_size}")
+    train = dataset.take(train_size)
+    val = dataset.skip(train_size).take(val_size)
+    test = dataset.skip(train_size+val_size).take(test_size)
+    return train,val,test
