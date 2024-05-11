@@ -2,12 +2,15 @@ import os
 import numpy as np
 import keras
 import random
+import pickle as pkl
 import pandas
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout
 from tensorflow import data as tf_data
 import matplotlib.pyplot as plt
 from util import func_confusion_matrix
+from tensorflow.keras.regularizers import l2 #adding regularization to address overfitting
+
 current_dir = os.path.dirname(__file__)
 data_dir = os.path.join(current_dir,'..','data','Rice_Image_Dataset')
 classes = [class_name for class_name in os.listdir(data_dir) if class_name]
@@ -57,11 +60,12 @@ val = dataset.skip(train_size).take(val_size)
 test = dataset.skip(train_size+val_size).take(test_size)
 
 model = Sequential()
-model.add(Conv2D(16, (3,3),1,activation='relu',input_shape=(256,256,3)))
+model.add(Conv2D(16, (3,3),1,activation='relu',input_shape=(256,256,3), kernel_regularizer=l2(0.02)))
 model.add(MaxPooling2D())
-model.add(Conv2D(32, (3,3), 1, activation='relu'))
+model.add(Conv2D(32, (3,3), 1, activation='relu', kernel_regularizer=l2(0.02)))
 model.add(MaxPooling2D())
-model.add(Conv2D(16,(3,3),1,activation='relu'))
+model.add(Conv2D(16,(3,3),1,activation='relu', kernel_regularizer=l2(0.02)))
+model.add(MaxPooling2D())
 model.add(Flatten())
 model.add(Dense(128, activation='relu'))
 model.add(Dense(5,activation='softmax'))
@@ -77,7 +81,9 @@ history = model.fit(train,
 
 models_dir = os.path.join(current_dir,'..','models','CNN')
 os.makedirs(models_dir,exist_ok="True")
-model.save(models_dir)
+model.save(os.path.join(models_dir,'CNN_Model.keras'))
+with open(os.path.join(models_dir,'cnnTrainHistory.pkl'),"wb") as file:
+    pkl.dump(history,file)
 # Plot training & validation loss values
 plt.figure(figsize=(8, 4))
 plt.plot(history.history['loss'], label='Train Loss')
@@ -97,5 +103,3 @@ plt.ylabel('Accuracy')
 plt.xlabel('Epoch')
 plt.legend(loc='lower right')
 plt.show()
-
-y_prediction = model.predict(test)
