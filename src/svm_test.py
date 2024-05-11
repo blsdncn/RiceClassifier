@@ -1,8 +1,6 @@
 import pathlib
-
-# For visualizations
 import random
-
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,16 +14,17 @@ import os
 
 def load_image_data(fold_path):
 
-    data_fol = fold_path
+    current_fold = os.path.dirname(__file__)
+    data_fol = os.path.join(current_fold, '..', 'data', 'Rice_Image_Dataset')
     data_fol = pathlib.Path(data_fol)
 
     # test_size = 100     # testcode
 
-    arborio_list = list(data_fol.glob('Arborio/*'))# [:test_size]
-    basmati_list = list(data_fol.glob('Basmati/*'))#[:test_size]
-    ipsala_list = list(data_fol.glob('Ipsala/*'))#[:test_size]
-    jasmine_list = list(data_fol.glob('Jasmine/*'))#[:test_size]
-    karacadag_list = list(data_fol.glob('Karacadag/*'))#[:test_size]
+    arborio_list = list(data_fol.glob('Arborio/*'))
+    basmati_list = list(data_fol.glob('Basmati/*'))
+    ipsala_list = list(data_fol.glob('Ipsala/*'))
+    jasmine_list = list(data_fol.glob('Jasmine/*'))
+    karacadag_list = list(data_fol.glob('Karacadag/*'))
 
     rice_images = {
         'arborio': arborio_list,
@@ -50,25 +49,26 @@ def load_image_data(fold_path):
             y.append(label)
 
     # Shuffle indices
-    #indices = list(range(len(X)))
-    #random.shuffle((indices))
-    indices = random.sample(range(len(X)),10000)
+    indices = list(range(len(X)))
+    random.shuffle((indices))
     X = [X[i] for i in indices]
     y = [y[i] for i in indices]
     images = [images[i] for i in indices]
+
 
     return X, y, images
 
 
 # Splits the data into a training and a testing set
-def split_data(X_data, y_labels, train_split=.8):
+def split_data(X_data, y_labels, images, train_split=.8):
     data_length = len(X_data)
     split_index = int(train_split * data_length)
 
     X_train, X_test = X_data[:split_index], X_data[split_index+1:]
     y_train, y_test = y_labels[:split_index], y_labels[split_index + 1:]
+    test_images = images[split_index+1:]
 
-    return X_train, X_test, y_train, y_test
+    return X_train, X_test, y_train, y_test, test_images
 
 # Takes in an array of SVM models and combines their predicitons to return a single set of multi-class predicitons
 def combined_pred(X_test, models, names):
@@ -144,106 +144,90 @@ def func_confusion_matrix(y_test, y_pred):
 
     return conf_matrix, accuracy, recall_array, precision_array
 
-def make_and_train_OvO(X_train, y_train, X_test, y_test, C, kernel):
+def make_and_train_OvO(X_train, y_train, X_test, y_test, C, kernel, subset_split_index = 0):
     class_names = ['arborio', 'basmati', 'ipsala', 'jasmine', 'karacadag']
     class_models = []
     # Create a model for each class
     for cat in class_names:
         model = svm.SVC(C = C, kernel=kernel)
         y_train_modified = [1 if x == cat else 0 for x in y_train]
-        # print(cat)
-        # print(y_train)
-        # print(y_train_modified)
+        if subset_split_index != 0:
+            X_train = X_train[:subset_split_index]
+            y_train_modified = y_train_modified[:subset_split_index]
+            X_test = X_test[:subset_split_index]
+
         model.fit(X_train, y_train_modified)
-        
         class_models.append(model)
 
     # Process all class models
     for index, cat in enumerate(class_names):
         model = class_models[index]
         y_pred = model.predict(X_test)
-        # y_test_modfied = [1 if x == cat else 0 for x in y_test]
-        # accuracy = accuracy_score(y_pred, y_test_modfied)
-        # print(f"Accuracy for class {cat}: {accuracy}")
 
     # Combine the results of the class models
     comb_pred = combined_pred(X_test, class_models, class_names)
-    # accuracy = accuracy_score(comb_pred, y_test)
-    # print(f'Total accuracy: {accuracy}')
     return comb_pred
 
-def main():
-    print("Starting")
-    current_dir = os.path.dirname(__file__)
-    data_dir = os.path.join(current_dir, '..', 'data','Rice_Image_Dataset')
 
-    X_data, y_data, images = load_image_data(data_dir)
-    X_train, X_test, y_train, y_test = split_data(X_data, y_data)
-
-# print("X_test: \n", X_test)
+X_data, y_data, images = load_image_data()
+X_train, X_test, y_train, y_test, images = split_data(X_data, y_data, images)
 
 
-    c_range = [.01, .5, 1, 2, 4]
-    kernel_range = ['linear', 'poly' ,'sigmoid', 'rbf']
-
+c_range = [.01, .5, 1, 2, 4]
+kernel_range = ['linear', 'poly','sigmoid', 'rbf']
+test_sample_size = 50
 # Test various C values
-    c_accuracies = []
-    for c in c_range:
-        print(f"Testing C={c}")
-        model_pred = make_and_train_OvO(X_train, y_train, X_test, y_test, c, 'linear')
-        c_accuracies.append(accuracy_score(model_pred, y_test))
+c_accuracies = []
+for c in c_range:
+    model_pred = make_and_train_OvO(X_train, y_train, X_test, y_test, c, 'linear', subset_split_index = test_sample_size)
+    c_accuracies.append(accuracy_score(model_pred, y_test[:test_sample_size]))
 
-    plt.plot(c_range, c_accuracies)
-    plt.title('SVM by C Values')
-    plt.xlabel('C Values')
-    plt.ylabel('Accuracy')
-    plt.show()
+plt.plot(c_range, c_accuracies)
+plt.title('SVM by C Values')
+plt.xlabel('C Values')
+plt.ylabel('Accuracy')
+plt.show()
 
 # Test various kernels
-    kernel_accuracies = []
-    for kernel in kernel_range:
-        make_and_train_OvO(X_train, y_train, X_test, y_test, 1, kernel)
-        kernel_accuracies.append(accuracy_score(model_pred, y_test))
+kernel_accuracies = []
+for kernel in kernel_range:
+    make_and_train_OvO(X_train, y_train, X_test, y_test, 1, kernel, subset_split_index = test_sample_size)
+    kernel_accuracies.append(accuracy_score(model_pred, y_test[:test_sample_size]))
 
-    plt.plot(kernel_range, kernel_accuracies)
-    plt.title('SVM by Kernels')
-    plt.xlabel('Kernel')
-    plt.ylabel('Accuracy')
-    plt.xticks(kernel_range)
-    plt.show()
+plt.plot(kernel_range, kernel_accuracies)
+plt.title('SVM by Kernels')
+plt.xlabel('Kernel')
+plt.ylabel('Accuracy')
+plt.xticks(kernel_range)
+plt.show()
 
-    best_c_index = np.argmax(c_accuracies)
-    best_kenel_index = np.argmax(kernel_accuracies)
+best_c_index = np.argmax(c_accuracies)
+best_kenel_index = np.argmax(kernel_accuracies)
 
 # use the best found parameters for the final model
-    best_model_pred = make_and_train_OvO(X_train, y_train, X_test, y_test, c_range[best_c_index], kernel_range[best_kenel_index])
+best_model_pred = make_and_train_OvO(X_train, y_train, X_test, y_test, c_range[best_c_index], kernel_range[best_kenel_index])
 
-#print("y_test: \t\t\t", y_test)
-#print("y_best_model_pred: \t\t", best_model_pred)
 
 # Get confusion matrix statistics
-    conf_matrix, acc, rec_array, prec_array = func_confusion_matrix(y_test, best_model_pred)
+conf_matrix, acc, rec_array, prec_array = func_confusion_matrix(y_test, best_model_pred)
 
-    print(f"Matrix:\n{conf_matrix}")
-    print(f"Accuracy: {acc}")
-    print(f"Recall : {rec_array}")
-    print(f"Precision : {prec_array}\n\n")
+print(f"Matrix:\n{conf_matrix}")
+print(f"Accuracy: {acc}")
+print(f"Recall : {rec_array}")
+print(f"Precision : {prec_array}\n\n")
 
 # Get the indices of non-matching elements
-    wrong_indices = []
-    for idx, y_true in enumerate(y_test):
-        if y_true != best_model_pred[idx]:
-            wrong_indices.append(idx)
-
-#rint("Wrong indicies", wrong_indices)  # test code
+wrong_indices = []
+for idx, y_true in enumerate(y_test):
+    if y_true != best_model_pred[idx]:
+        wrong_indices.append(idx)
 
 # Print and display images for the non-matching elements
-    for idx in wrong_indices[:10]:
-        print("Index:", idx)
-        print("True Label:", y_test[idx])
-        print("Predicted Label:", best_model_pred[idx])
-        plt.imshow(images[idx], cmap='gray')
-        plt.show()
+for idx in wrong_indices[:10]:
+    print("Index:", idx)
+    print("True Label:", y_test[idx])
+    print("Predicted Label:", best_model_pred[idx])
+    plt.imshow(images[idx], cmap='gray')
+    plt.show()
 
-if __name__ == '__main__':
-    main()
+

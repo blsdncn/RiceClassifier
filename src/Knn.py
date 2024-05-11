@@ -1,15 +1,21 @@
 import pathlib
-import matplotlib.pyplot as plt
-from skimage.transform import resize
-from skimage.color import rgb2gray
-from skimage.feature import hog
-from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, classification_report
+import os
+import random
+import matplotlib.pyplot as plt # type: ignore
+from skimage.transform import resize # type: ignore
+from skimage.color import rgb2gray # type: ignore
+from skimage.feature import hog # type: ignore
+from sklearn.model_selection import train_test_split # type: ignore
+from sklearn.neighbors import KNeighborsClassifier # type: ignore
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix # type: ignore
+import numpy as np # type: ignore
 
 def load_image_data():
-    data_fol = "./Rice_Image_Dataset"
+
+    current_fold = os.path.dirname(__file__)
+    data_fol = os.path.join(current_fold, '..', 'data', 'Rice_Image_Dataset')
     data_fol = pathlib.Path(data_fol)
+
 
     arborio_list = list(data_fol.glob('Arborio/*'))
     basmati_list = list(data_fol.glob('Basmati/*'))
@@ -27,36 +33,176 @@ def load_image_data():
 
     X = []
     y = []
+    images = []
 
     for label, fold_path in rice_images.items():
         for image_path in fold_path:
             image = plt.imread(image_path)
-            image = resize(image, (100, 100))
+            images.append(image)
+            image = resize(image, (100,100))
             image = rgb2gray(image)
             features = hog(image, orientations=8, pixels_per_cell=(16, 16), cells_per_block=(1, 1))
             X.append(features)
             y.append(label)
 
-    return X, y
+    # Shuffle indices
+    indices = list(range(len(X)))
+    random.shuffle((indices))
+    X = [X[i] for i in indices]
+    y = [y[i] for i in indices]
+    images = [images[i] for i in indices]
 
-def split_data(X_data, y_labels, train_split=.8):
-    return train_test_split(X_data, y_labels, train_size=train_split, random_state=42)
 
-X_data, y_data = load_image_data()
-X_train, X_test, y_train, y_test = split_data(X_data, y_data)
+    return X, y, images
 
-# initializes and trains k classifier
-k = 5  # Neighbors
-knn = KNeighborsClassifier(n_neighbors=k)
-knn.fit(X_train, y_train)
 
-# Predict test data
-y_pred = knn.predict(X_test)
+# Splits the data into a training and a testing set
+def split_data(X_data, y_labels, images, train_split=.8):
+    data_length = len(X_data)
+    split_index = int(train_split * data_length)
 
-# Calculate the current accuracy of the model
-accuracy = accuracy_score(y_test, y_pred)
-print("Accuracy score:", accuracy)
+    X_train, X_test = X_data[:split_index], X_data[split_index+1:]
+    y_train, y_test = y_labels[:split_index], y_labels[split_index + 1:]
+    test_images = images[split_index+1:]
 
-# Create a report based upon classification
-print("The current classification:")
-print(classification_report(y_test, y_pred))
+    return X_train, X_test, y_train, y_test, test_images
+
+def test_different_k_values(X_train, y_train, X_test, y_test, k_values, subset_split_index=0):
+    results = {}
+    confusion_matrices = {}
+    error_samples = {}
+    models = []
+    for k in k_values:
+        knn = KNeighborsClassifier(n_neighbors=k)
+        if subset_split_index != 0:
+            X_train = X_train[:subset_split_index]
+            y_train = y_train[:subset_split_index]
+            X_test = X_test[:subset_split_index]
+            y_test = y_test[:subset_split_index]
+
+        knn.fit(X_train, y_train)
+        y_pred = knn.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        results[k] = accuracy
+
+        confusion_matrice = confusion_matrix(y_test, y_pred)
+        confusion_matrices[k] = confusion_matrice
+
+        error = np.where(y_pred != y_test)[0]
+        error_samples[k] = error
+        models.append(knn)
+
+    return results, confusion_matrices, error_samples, models
+
+# function taken from HW 4
+def func_confusion_matrix(y_test, y_pred):
+    """ this function is used to calculate the confusion matrix and a set of metrics.
+    INPUT:
+        y_test, ground-truth lables;
+        y_pred, predicted labels;
+    OUTPUT:
+        CM, confuction matrix
+        acc, accuracy
+        arrR[], per-class recall rate,
+        arrP[], per-class prediction rate.
+    """
+
+    y_test = np.array(y_test)
+    y_pred = np.array(y_pred)
+
+    unique_values = set(y_test)
+    sorted(unique_values)
+    num_classes = len(unique_values)
+    unique_values = np.array(list(unique_values))  # change to array so can use indexes
+    possible_string_dict = {}
+    # make sure all values are 0 based, so can use built-in "zip" function
+    if (issubclass(type(y_test[0]), np.integer)):  # if values are integers
+        y_test_min = y_test.min()
+        if (y_test_min != 0):  # if does not contain 0, reduce both test and pred by min value to get 0 based for both
+            y_test = y_test - y_test_min;
+            y_pred = y_pred - y_test_min;
+    else:
+        # assume values are strings, change to integers
+        y_test_int = np.empty(len(y_test), dtype=int)
+        y_pred_int = np.empty(len(y_pred), dtype=int)
+        for index in range(0, num_classes):
+            current_value = unique_values[index]
+            possible_string_dict[index] = current_value
+            y_test_int[y_test == current_value] = index
+            y_pred_int[y_pred == current_value] = index
+        y_test = y_test_int
+        y_pred = y_pred_int
+
+    ## your code for creating confusion matrix;
+    conf_matrix = np.zeros((num_classes, num_classes), dtype=int)
+    for a, p in zip(y_test, y_pred):
+        # print(conf_matrix)
+        conf_matrix[a][p] += 1
+
+    ## your code for calcuating acc;
+    accuracy = conf_matrix.diagonal().sum() / conf_matrix.sum()
+
+    ## your code for calcualting arrR and arrP;
+    recall_array = np.empty(num_classes, dtype=float)
+    precision_array = np.empty(num_classes, dtype=float)
+    for index in range(0, num_classes):
+        value = conf_matrix[index, index]
+        recall_sum = conf_matrix[index, :].sum()
+        precision_sum = conf_matrix[:, index].sum()
+        recall_array[index] = value / recall_sum
+        precision_array[index] = value / precision_sum
+
+    return conf_matrix, accuracy, recall_array, precision_array
+
+X_data, y_data, images = load_image_data()
+X_train, X_test, y_train, y_test, test_images = split_data(X_data, y_data, images)
+
+# Here I implemented a series of different k values to be tested
+k_values_to_test = [1, 3, 5, 7, 9]
+sample_size = 300
+
+# Here a series of different values are also going to be tested
+accuracy_results, confusion_matrices, error_samples, models = test_different_k_values(X_train, y_train, X_test, y_test,
+                                                                                      k_values_to_test, sample_size)
+
+# This prints all the accuracy results for k
+for k, accuracy in accuracy_results.items():
+    print(f"Th calculated accuracy of k = {k}: {accuracy}")
+
+plt.plot(k_values_to_test, accuracy_results.values())
+plt.title('SVM by C Values')
+plt.xlabel('K Values')
+plt.ylabel('Accuracy')
+plt.show()
+
+best_k = max(accuracy_results, key=accuracy_results.get)
+
+# Specific values of k adhere to the confusion matrix
+best_model = KNeighborsClassifier(n_neighbors=best_k)
+best_model.fit(X_train, y_train)
+
+y_pred = best_model.predict(X_test)
+
+conf_matrix, acc, rec_array, prec_array =  func_confusion_matrix(y_test, y_pred)
+
+print(f"Matrix:\n{conf_matrix}")
+print(f"Accuracy: {acc}")
+print(f"Recall : {rec_array}")
+print(f"Precision : {prec_array}\n\n")
+
+
+# The error samples are going to be printed hee
+# Get the indices of non-matching elements
+wrong_indices = []
+for idx, y_true in enumerate(y_test):
+    if y_true != y_pred[idx]:
+        wrong_indices.append(idx)
+
+# Print and display images for the non-matching elements
+for idx in wrong_indices[:10]:
+    print("Index:", idx)
+    print("True Label:", y_test[idx])
+    print("Predicted Label:", y_pred[idx])
+    plt.imshow(test_images[idx], cmap='gray')
+    plt.show()
+
