@@ -22,7 +22,7 @@ with open(history_path,"rb") as file:
 
 model = keras.models.load_model(model_path)
 
-
+plotConvCurveFromHistory(history.history)
 # Lists for all predictions and true labels
 y_true = []
 y_pred = []

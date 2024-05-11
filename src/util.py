@@ -65,26 +65,26 @@ def func_confusion_matrix(y_test, y_pred):
 def plotConvCurveFromHistory(history,save_path=os.path.join(os.path.dirname(__file__),'..','metric_images',"CS 549 Project CNN")):
 # Plot training & validation loss values
     plt.figure(figsize=(8, 4))
-    plt.plot(history.history['loss'], label='Train Loss')
-    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.plot(history['loss'], label='Train Loss')
+    plt.plot(history['val_loss'], label='Validation Loss')
     plt.title('Model Loss')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
     plt.legend(loc='upper right')
     plt.show()
-    plt.save(os.path.join(save_path,'lossCurve.jpg'))
+    plt.savefig(os.path.join(save_path,'lossCurve.jpg'))
 
 
 # Plot training & validation accuracy values
     plt.figure(figsize=(8, 4))
-    plt.plot(history.history['accuracy'], label='Train Accuracy')
-    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.plot(history['accuracy'], label='Train Accuracy')
+    plt.plot(history['val_accuracy'], label='Validation Accuracy')
     plt.title('Model Accuracy')
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
     plt.legend(loc='lower right')
     plt.show()
-    plt.save(os.path.join(save_path,'accuracyCurve.jpg'))
+    plt.savefig(os.path.join(save_path,'accuracyCurve.jpg'))
 
 
 def getDataAndSplit(data_dir,verbose=False):
